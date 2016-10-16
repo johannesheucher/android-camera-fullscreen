@@ -18,9 +18,15 @@
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true" />
     <TextView
-        android:id="@+id/infoText"
+        android:id="@+id/curValue"
         android:layout_marginTop="20dp"
         android:layout_below="@id/camera_view"
+        android:layout_width="match_parent"
+        android:layout_height="50dp" />
+    <TextView
+        android:id="@+id/maxValue"
+        android:layout_marginTop="20dp"
+        android:layout_below="@id/curValue"
         android:layout_width="match_parent"
         android:layout_height="50dp" />
 

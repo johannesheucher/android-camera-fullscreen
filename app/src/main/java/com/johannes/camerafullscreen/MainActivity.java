@@ -3,7 +3,9 @@ package com.johannes.camerafullscreen;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.View;
 import android.widget.TextView;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -19,10 +21,12 @@ import org.opencv.imgproc.Imgproc;
 
 import java.io.IOException;
 
-public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
+public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2, View.OnTouchListener {
 
     private CameraView cameraView;
-    private TextView infoText;
+    private TextView curValueText;
+    private TextView maxValueText;
+    private double maxValue = 0.0;
     private Mat template = null;
     private Mat matGray = null;
 
@@ -31,7 +35,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         public void onManagerConnected(int status) {
             if (status == BaseLoaderCallback.SUCCESS) {
                 cameraView.enableView();
-
+                cameraView.setOnTouchListener(MainActivity.this);
                 try {
                     template = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template);
                 } catch (IOException e) {
@@ -53,7 +57,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         cameraView.setVisibility(SurfaceView.VISIBLE);
         cameraView.setCvCameraViewListener(this);
 
-        infoText = (TextView)findViewById(R.id.infoText);
+        curValueText = (TextView)findViewById(R.id.curValue);
+        maxValueText = (TextView)findViewById(R.id.maxValue);
     }
 
 
@@ -108,10 +113,20 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Imgproc.cvtColor(matRgba, matGray, Imgproc.COLOR_RGBA2GRAY);
         Imgproc.Canny(matGray, matGray, 50, 150);
 
-        Core.MinMaxLocResult matchLocation = match(matGray, template);
+        final Core.MinMaxLocResult matchLocation = match(matGray, template);
 
         if (matchLocation != null) {
-            //infoText.setText(new Double(matchLocation.maxVal).toString());
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    String curValueString = new Double(matchLocation.maxVal).toString();
+                    curValueText.setText(curValueString);
+                    if (matchLocation.maxVal > maxValue) {
+                        maxValue = matchLocation.maxVal;
+                        maxValueText.setText(curValueString);
+                    }
+                }
+            });
             Imgproc.rectangle(matRgba, matchLocation.maxLoc, new Point(matchLocation.maxLoc.x + template.cols(), matchLocation.maxLoc.y + template.rows()), new Scalar(50, 200, 255), 8);
         }
 
@@ -127,10 +142,17 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         Core.MinMaxLocResult minMaxResult = Core.minMaxLoc(matchResult);
         Log.i("MainActivity", new Double(minMaxResult.maxVal).toString());
-        if (minMaxResult.maxVal > 6E7) {
+        if (minMaxResult.maxVal > 2E7) {
             return minMaxResult;
         } else {
             return null;
         }
+    }
+
+
+    @Override
+    public boolean onTouch(View view, MotionEvent event) {
+        maxValue = 0.0;
+        return false;
     }
 }
