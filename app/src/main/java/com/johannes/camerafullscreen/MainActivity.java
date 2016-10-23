@@ -7,7 +7,6 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -19,21 +18,21 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.IOException;
-
-import static org.opencv.core.CvType.CV_8UC1;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2, View.OnTouchListener {
 
     private CameraView cameraView;
     private TextView curValueText;
     private TextView maxValueText;
-    private double minValue = Double.MAX_VALUE;
+    private double maxValue;
     private Mat template = null;
     private Mat mask = null;
     private Mat matGray = null;
+    private int matchFunction;
 
     private BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -43,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 cameraView.setOnTouchListener(MainActivity.this);
                 try {
                     template = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template);
+                    //template = Utils.loadResource(mAppContext, R.drawable.wimmel_template);
                     mask = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template_mask);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -65,6 +65,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         curValueText = (TextView)findViewById(R.id.curValue);
         maxValueText = (TextView)findViewById(R.id.maxValue);
+
+        matchFunction = Imgproc.TM_SQDIFF;
+        onTouch(null, null);
     }
 
 
@@ -111,6 +114,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         Mat matRgba = inputFrame.rgba();
+        Mat matRgb = new Mat(matRgba.rows(), matRgba.cols(), CvType.CV_8UC3);
+        Imgproc.cvtColor(matRgba, matRgb, Imgproc.COLOR_RGBA2RGB);
 
         if (matGray == null) {
             matGray = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
@@ -119,31 +124,48 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Imgproc.cvtColor(matRgba, matGray, Imgproc.COLOR_RGBA2GRAY);
         Imgproc.Canny(matGray, matGray, 50, 150);
 
-        final Core.MinMaxLocResult matchLocation = match(matGray, template, mask);
+        // TODO: Blur edge image?
+        Imgproc.blur(matGray, matGray, new Size(5, 5));
+
+        Mat curMat = matGray;
+
+        //final Core.MinMaxLocResult matchLocation = match(matGray, template, mask);
+        Core.MinMaxLocResult matchLocation = match(curMat, template, mask);
+        final Point loc;
+        final double val;
+        if (minValueFunction()) {
+            loc = matchLocation.minLoc;
+            val = matchLocation.minVal;
+        } else {
+            loc = matchLocation.maxLoc;
+            val = matchLocation.maxVal;
+        }
+
 
         if (matchLocation != null) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    String curValueString = new Double(matchLocation.minVal).toString();
+                    String curValueString = new Double(val).toString();
                     curValueText.setText(curValueString);
-                    if (matchLocation.minVal < minValue) {
-                        minValue = matchLocation.minVal;
+                    if ( minValueFunction() && val < maxValue ||
+                        !minValueFunction() && val > maxValue) {
+                        maxValue = val;
                         maxValueText.setText(curValueString);
                     }
                 }
             });
-            Imgproc.rectangle(matGray, matchLocation.minLoc, new Point(matchLocation.minLoc.x + template.cols(), matchLocation.minLoc.y + template.rows()), new Scalar(50, 200, 255), 8);
+            Imgproc.rectangle(curMat, loc, new Point(loc.x + template.cols(), loc.y + template.rows()), new Scalar(220, 180, 255), 6);
         }
 
-        return matGray;
+        return curMat;
     }
 
 
     protected Core.MinMaxLocResult match(Mat image, Mat template, Mat mask) {
         Mat matchResult = new Mat(image.rows() - template.rows() + 1, image.cols() - template.cols() + 1, CvType.CV_32FC1);
 
-        Imgproc.matchTemplate(image, template, matchResult, Imgproc.TM_SQDIFF);
+        Imgproc.matchTemplate(image, template, matchResult, matchFunction, mask);
         //Core.normalize(matchResult, matchResult, 0, 1, Core.NORM_MINMAX, -1, new Mat());
 
         // draw result
@@ -164,7 +186,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         Core.MinMaxLocResult minMaxResult = Core.minMaxLoc(matchResult);
         Log.i("MainActivity", new Double(minMaxResult.maxVal).toString());
-        if (minMaxResult.minVal < 1.3E9) {
+        if (true) {//(minMaxResult.minVal < 1.3E9) {
             return minMaxResult;
         } else {
             return null;
@@ -172,9 +194,18 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
 
 
+    public boolean minValueFunction() {
+        return (matchFunction == Imgproc.TM_SQDIFF || matchFunction == Imgproc.TM_SQDIFF_NORMED);
+    }
+
+
     @Override
     public boolean onTouch(View view, MotionEvent event) {
-        minValue = 0.0;
+        if (minValueFunction()) {
+            maxValue = Double.MAX_VALUE;
+        } else {
+            maxValue = 0;
+        }
         return false;
     }
 }
