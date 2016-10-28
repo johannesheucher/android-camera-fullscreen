@@ -18,7 +18,7 @@ out/
 build/
 
 # OpenCV Library build files
-openCVLibrary310/build/
+openCVLibrary310/build
 
 # Local configuration file (sdk path, etc)
 local.properties
