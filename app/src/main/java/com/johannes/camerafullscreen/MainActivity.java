@@ -7,6 +7,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -30,7 +31,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private TextView maxValueText;
     private double maxValue;
     private Mat template = null;
+    private Mat source = null;
     private Mat mask = null;
+    private Mat sourceMask = null;
     private Mat matGray = null;
     private int matchFunction;
 
@@ -42,8 +45,19 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 cameraView.setOnTouchListener(MainActivity.this);
                 try {
                     template = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template);
+                    template = template.t();
+
+                    source = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_source);
+                    /*
+                    for a test, create an image CONTAINING the template and some other stuff around it
+                        a. stuff out of bounding box
+                        b. stuff inside bounding box but outside mask -> test with mask
+                    Load this image and test template against it. Results should be best possible!!!
+                    */
+
                     //template = Utils.loadResource(mAppContext, R.drawable.wimmel_template);
                     mask = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template_mask);
+                    sourceMask = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_source_mask);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -66,7 +80,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         curValueText = (TextView)findViewById(R.id.curValue);
         maxValueText = (TextView)findViewById(R.id.maxValue);
 
-        matchFunction = Imgproc.TM_SQDIFF;
+        matchFunction = Imgproc.TM_CCORR_NORMED;
         onTouch(null, null);
     }
 
@@ -113,50 +127,75 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        Mat matRgba = inputFrame.rgba();
-        Mat matRgb = new Mat(matRgba.rows(), matRgba.cols(), CvType.CV_8UC3);
-        Imgproc.cvtColor(matRgba, matRgb, Imgproc.COLOR_RGBA2RGB);
+        matGray = inputFrame.gray();
+//        Mat matRgb = new Mat(matRgba.rows(), matRgba.cols(), CvType.CV_8UC3);
+//        Imgproc.cvtColor(matRgba, matRgb, Imgproc.COLOR_RGBA2RGB);
 
-        if (matGray == null) {
-            matGray = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
-        }
+//        if (matGray == null) {
+//            matGray = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
+//        }
 
-        Imgproc.cvtColor(matRgba, matGray, Imgproc.COLOR_RGBA2GRAY);
+        // turn into gray edge image
+        //Imgproc.cvtColor(matRgba, matGray, Imgproc.COLOR_RGBA2GRAY);
         Imgproc.Canny(matGray, matGray, 50, 150);
 
+        // apply mask
+        Mat matGrayMasked = new Mat(matGray.cols(), matGray.rows(), CvType.CV_8UC1);
+        matGray.copyTo(matGrayMasked, sourceMask);
+        matGray = matGrayMasked;
+
+
+        //Imgproc.threshold(matGray, matGray, 160, 255, Imgproc.THRESH_BINARY);
+
         // TODO: Blur edge image?
-        Imgproc.blur(matGray, matGray, new Size(5, 5));
+        Imgproc.blur(matGray, matGray, new Size(20, 20));
+        Imgproc.threshold(matGray, matGray, 15, 255, Imgproc.THRESH_BINARY);
+
+//        if (source.cols() != matRgba.cols() && source.rows() != matRgba.rows()) {
+//            Imgproc.resize(source, source, new Size(matRgba.cols(), matRgba.rows()));
+//        }
 
         Mat curMat = matGray;
 
-        //final Core.MinMaxLocResult matchLocation = match(matGray, template, mask);
-        Core.MinMaxLocResult matchLocation = match(curMat, template, mask);
-        final Point loc;
         final double val;
-        if (minValueFunction()) {
-            loc = matchLocation.minLoc;
-            val = matchLocation.minVal;
-        } else {
-            loc = matchLocation.maxLoc;
-            val = matchLocation.maxVal;
-        }
-
+        Core.MinMaxLocResult matchLocation;
+        matchLocation = match(curMat, template, mask);
 
         if (matchLocation != null) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    String curValueString = new Double(val).toString();
-                    curValueText.setText(curValueString);
-                    if ( minValueFunction() && val < maxValue ||
-                        !minValueFunction() && val > maxValue) {
-                        maxValue = val;
-                        maxValueText.setText(curValueString);
-                    }
-                }
-            });
+            final Point loc;
+            if (minValueFunction()) {
+                loc = matchLocation.minLoc;
+                val = matchLocation.minVal;
+            } else {
+                loc = matchLocation.maxLoc;
+                val = matchLocation.maxVal;
+            }
             Imgproc.rectangle(curMat, loc, new Point(loc.x + template.cols(), loc.y + template.rows()), new Scalar(220, 180, 255), 6);
+        } else {
+            val = matchShapes(curMat, template);
         }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                String curValueString = new Double(val).toString();
+                curValueText.setText(curValueString);
+                if ( minValueFunction() && val < maxValue ||
+                        !minValueFunction() && val > maxValue) {
+                    maxValue = val;
+                    maxValueText.setText(curValueString);
+                }
+
+                // show template
+                // convert to bitmap:
+                Bitmap bm = Bitmap.createBitmap(template.cols(), template.rows(), Bitmap.Config.ARGB_8888);
+                Utils.matToBitmap(template, bm);
+
+                // find the imageview and draw it
+                ImageView iv = (ImageView)findViewById(R.id.result_view);
+                iv.setImageBitmap(bm);
+            }
+        });
 
         return curMat;
     }
@@ -164,6 +203,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     protected Core.MinMaxLocResult match(Mat image, Mat template, Mat mask) {
         Mat matchResult = new Mat(image.rows() - template.rows() + 1, image.cols() - template.cols() + 1, CvType.CV_32FC1);
+
 
         Imgproc.matchTemplate(image, template, matchResult, matchFunction, mask);
         //Core.normalize(matchResult, matchResult, 0, 1, Core.NORM_MINMAX, -1, new Mat());
@@ -191,6 +231,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         } else {
             return null;
         }
+    }
+
+
+    protected double matchShapes(Mat image, Mat template) {
+        double result = Imgproc.matchShapes(image, template, Imgproc.CV_CONTOURS_MATCH_I1, 0);
+        return result;
     }
 
 

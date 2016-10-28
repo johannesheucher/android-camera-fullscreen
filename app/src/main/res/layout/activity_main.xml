@@ -17,23 +17,23 @@
         android:layout_alignParentTop="true"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true" />
-    <!--ImageView
-        android:layout_width="match_parent"
-        android:layout_height="250dp"
+    <ImageView
+        android:layout_width="100dp"
+        android:layout_height="100dp"
         android:layout_below="@id/camera_view"
-        android:layout_marginTop="10dp"
-        android:id="@+id/result_view" /-->
+        android:layout_marginTop="2dp"
+        android:id="@+id/result_view" />
     <TextView
         android:id="@+id/curValue"
-        android:layout_marginTop="20dp"
-        android:layout_below="@id/camera_view"
-        android:layout_width="100dp"
-        android:layout_height="30dp" />
+        android:layout_marginTop="10dp"
+        android:layout_below="@id/result_view"
+        android:layout_width="150dp"
+        android:layout_height="20dp" />
     <TextView
         android:id="@+id/maxValue"
         android:layout_marginTop="10dp"
         android:layout_below="@id/curValue"
-        android:layout_width="100dp"
-        android:layout_height="30dp" />
+        android:layout_width="150dp"
+        android:layout_height="20dp" />
 
 </RelativeLayout>
