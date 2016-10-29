@@ -1,6 +1,7 @@
 package com.johannes.camerafullscreen;
 
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,9 +18,6 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.IOException;
@@ -36,6 +34,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private Mat sourceMask = null;
     private Mat matGray = null;
     private int matchFunction;
+
+    private TemplateMatcherTask matcherTask;
 
     private BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -135,32 +135,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 //            matGray = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
 //        }
 
-        // turn into gray edge image
-        //Imgproc.cvtColor(matRgba, matGray, Imgproc.COLOR_RGBA2GRAY);
-        Imgproc.Canny(matGray, matGray, 50, 150);
 
-        // apply mask
-        Mat matGrayMasked = new Mat(matGray.cols(), matGray.rows(), CvType.CV_8UC1);
-        matGray.copyTo(matGrayMasked, sourceMask);
-        matGray = matGrayMasked;
-
-
-        //Imgproc.threshold(matGray, matGray, 160, 255, Imgproc.THRESH_BINARY);
-
-        // TODO: Blur edge image?
-        Imgproc.blur(matGray, matGray, new Size(20, 20));
-        Imgproc.threshold(matGray, matGray, 15, 255, Imgproc.THRESH_BINARY);
-
-//        if (source.cols() != matRgba.cols() && source.rows() != matRgba.rows()) {
-//            Imgproc.resize(source, source, new Size(matRgba.cols(), matRgba.rows()));
-//        }
-
-        Mat curMat = matGray;
-
-        final double val;
-        Core.MinMaxLocResult matchLocation;
-        matchLocation = match(curMat, template, mask);
-
+        /*
         if (matchLocation != null) {
             final Point loc;
             if (minValueFunction()) {
@@ -174,10 +150,18 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         } else {
             val = matchShapes(curMat, template);
         }
+        */
 
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (matcherTask == null || matcherTask.getStatus() != AsyncTask.Status.FINISHED) {
+                    matcherTask = new TemplateMatcherTask(template, mask, sourceMask, matchFunction, curValueText);
+                    matcherTask.execute(matGray);
+                }
+
+
+                /*
                 String curValueString = new Double(val).toString();
                 curValueText.setText(curValueString);
                 if ( minValueFunction() && val < maxValue ||
@@ -185,7 +169,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     maxValue = val;
                     maxValueText.setText(curValueString);
                 }
+                */
 
+                /*
                 // show template
                 // convert to bitmap:
                 Bitmap bm = Bitmap.createBitmap(template.cols(), template.rows(), Bitmap.Config.ARGB_8888);
@@ -194,10 +180,15 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 // find the imageview and draw it
                 ImageView iv = (ImageView)findViewById(R.id.result_view);
                 iv.setImageBitmap(bm);
+                */
             }
         });
 
-        return curMat;
+        Mat matRgba = inputFrame.rgba();
+        Mat matMasked = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
+        matRgba.copyTo(matMasked, sourceMask);
+
+        return matMasked;
     }
 
 
