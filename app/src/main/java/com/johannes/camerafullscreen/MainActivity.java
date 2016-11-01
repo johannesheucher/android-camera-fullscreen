@@ -16,6 +16,7 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
@@ -31,6 +32,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private Mat template = null;
     private Mat templateMask = null;
     private Mat sourceMask = null;
+    private Mat sourceWatermark = null;
     private Mat matGray = null;
     private int matchFunction;
 
@@ -47,6 +49,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     template = template.t();
                     templateMask = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_template_mask);
                     sourceMask = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_source_mask);
+                    sourceWatermark = Utils.loadResource(mAppContext, R.drawable.marque_mercedes_source_watermark);
+                    Imgproc.cvtColor(sourceWatermark, sourceWatermark, Imgproc.COLOR_GRAY2RGBA);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -142,6 +146,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Mat matRgba = inputFrame.rgba();
         Mat matMasked = new Mat(matRgba.cols(), matRgba.rows(), CvType.CV_8UC1);
         matRgba.copyTo(matMasked, sourceMask);
+
+
+
+        Core.addWeighted(matMasked, 1.0, sourceWatermark, 0.3, 0, matMasked);
 
         return matMasked;
     }
