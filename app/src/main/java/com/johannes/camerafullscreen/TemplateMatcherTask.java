@@ -1,6 +1,7 @@
 package com.johannes.camerafullscreen;
 
 import android.os.AsyncTask;
+import android.util.Pair;
 import android.widget.TextView;
 
 import org.opencv.core.Core;
@@ -9,13 +10,16 @@ import org.opencv.core.Mat;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
-public class TemplateMatcherTask extends AsyncTask<Mat, Void, Double> {
+public class TemplateMatcherTask extends AsyncTask<Mat, Void, Pair<Mat, Double>> {
 
     private Mat template;
     private Mat templateMask;
     private Mat sourceMask;
     private int matchFunction;
     private TextView resultLabel;
+    private Mat resultImage;
+
+    static Double maxResult;
 
     public TemplateMatcherTask(Mat template, Mat templateMask, Mat sourceMask, int matchFunction, TextView resultLabel) {
         this.template = template;
@@ -27,7 +31,7 @@ public class TemplateMatcherTask extends AsyncTask<Mat, Void, Double> {
 
 
     @Override
-    protected Double doInBackground(Mat... params) {
+    protected Pair<Mat, Double> doInBackground(Mat... params) {
         Mat image = params[0];
 
         // turn into gray edge image
@@ -47,13 +51,14 @@ public class TemplateMatcherTask extends AsyncTask<Mat, Void, Double> {
         Mat matchResult = new Mat(image.rows() - template.rows() + 1, image.cols() - template.cols() + 1, CvType.CV_32FC1);
         Imgproc.matchTemplate(image, template, matchResult, matchFunction, templateMask);
 
-
+        Pair<Mat, Double> result;
         Core.MinMaxLocResult minMaxResult = Core.minMaxLoc(matchResult);
         if (minValueFunction(matchFunction)) {
-            return minMaxResult.minVal;
+            result = new Pair<>(image, minMaxResult.minVal);
         } else {
-            return minMaxResult.maxVal;
+            result = new Pair<>(image, minMaxResult.maxVal);
         }
+        return result;
     }
 
 
@@ -63,8 +68,33 @@ public class TemplateMatcherTask extends AsyncTask<Mat, Void, Double> {
 
 
     @Override
-    protected void onPostExecute(Double aDouble) {
-        super.onPostExecute(aDouble);
-        resultLabel.setText(aDouble.toString());
+    protected void onPostExecute(Pair<Mat, Double> result) {
+        super.onPostExecute(result);
+
+        // write result value
+        resultLabel.setText(result.second.toString());
+
+        // calculate max value
+        if (maxResult == null) {
+            maxResult = result.second;
+        } else {
+            if (minValueFunction(matchFunction)) {
+                if (result.second < maxResult) {
+                    maxResult = result.second;
+                }
+            } else {
+                if (result.second > maxResult) {
+                    maxResult = result.second;
+                }
+            }
+        }
+
+        // write result image
+        resultImage = result.first;
+    }
+
+
+    public Mat getResultImage() {
+        return resultImage;
     }
 }
